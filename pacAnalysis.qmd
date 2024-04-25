@@ -4,3 +4,95 @@ format: html
 editor: visual
 ---
 
+```{r}
+library(tidyverse)
+library(gganimate)
+library(gifski)
+
+pacdf1 <- read_csv("pacdf/pacdf1999-2000.csv", show_col_types = FALSE) |>
+  mutate(year = 2000)
+
+pacdf2 <- read_csv("pacdf/pacdf2001-2002.csv",  show_col_types = FALSE) |>
+  mutate(year = 2002)
+
+pacdf3 <- read_csv("pacdf/pacdf2003-2004.csv", show_col_types = FALSE) |>
+  mutate(year = 2004)
+
+pacdf4 <- read_csv("pacdf/pacdf2005-2006.csv", show_col_types = FALSE) |>
+  mutate(year = 2006)
+
+pacdf5 <- read_csv("pacdf/pacdf2007-2008.csv", show_col_types = FALSE) |>
+  mutate(year = 2008)
+
+pacdf6 <- read_csv("pacdf/pacdf2009-2010.csv", show_col_types = FALSE) |>
+  mutate(year = 2010)
+
+pacdf7 <- read_csv("pacdf/pacdf2011-2012.csv", show_col_types = FALSE) |>
+  mutate(year = 2012)
+
+pacdf8 <- read_csv("pacdf/pacdf2013-2014.csv", show_col_types = FALSE) |>
+  mutate(year = 2014)
+
+pacdf9 <- read_csv("pacdf/pacdf2015-2016.csv", show_col_types = FALSE) |>
+  mutate(year = 2016)
+
+pacdf10 <- read_csv("pacdf/pacdf2017-2018.csv", show_col_types = FALSE) |>
+  mutate(year = 2018)
+
+pacdf11 <- read_csv("pacdf/pacdf2019-2020.csv", show_col_types = FALSE) |>
+  mutate(year = 2020)
+
+pacdf12 <- read_csv("pacdf/pacdf2021-2022.csv", show_col_types = FALSE) |>
+  mutate(year = 2022)
+
+pacdf13 <- read_csv("pacdf/pacdf2023-2024.csv", show_col_types = FALSE) |>
+  mutate(year = 2024)
+
+
+combinepacdf <- bind_rows(pacdf1, pacdf2, pacdf3, pacdf4, pacdf5, 
+          pacdf6, pacdf7, pacdf8, pacdf9, pacdf10, 
+          pacdf11, pacdf12, pacdf13)
+
+```
+
+```{r warning =FALSE}
+processpac <- combinepacdf |>
+  separate( "Country of Origin/Parent Company", into = c("Country", "Parent_Company"), sep = "/") |>
+  mutate(Dems = as.double(str_sub(Dems, 2, 12))) |>
+  mutate(Repubs = as.double(str_sub(Repubs, 2, 12))) |>
+  mutate(Total = as.double(str_sub(Total, 2, 12))) |>
+  drop_na()
+
+processpac |>
+  summarise(Dems = sum(Dems), 
+            Repubs = sum(Repubs), .by = c(year)) |>
+  pivot_longer(cols = c("Dems", "Repubs"), names_to = "Parties",
+               values_to = "Values") |>
+  ggplot(aes(x = year, y = Values, color = Parties)) +
+  geom_point() + 
+  geom_line()
+```
+
+```{r}
+animated_plot <- processpac %>%
+  pivot_longer(cols = c("Dems", "Repubs"), names_to = "Parties", values_to = "Values") %>%
+  summarise(valuescount = sum(Values), .by = c(Country, year, Parties)) %>%
+  ungroup() |>
+  ggplot(aes(x = Country, y = valuescount, fill = Parties)) +
+  geom_col(position = 'dodge') +
+  scale_x_discrete(guide = guide_axis(angle = 45)) +
+  theme_bw() +
+  transition_time(year) +
+  labs(title = 'Year: {frame_time}', y = 'Total Donations', x = 'Country') +
+  ease_aes('linear')
+
+# Render and save the animation
+animate(animated_plot,  fps = 10)
+
+```
+
+
+
+
+
+
