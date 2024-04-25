@@ -92,6 +92,19 @@ animate(animated_plot,  fps = 10)
 ```
 
 
+```{r}
+animated_plot2 <- processpac |>
+  pivot_longer(cols = c("Dems", "Repubs"), names_to = "Parties", values_to = "Values") |>
+  summarise(totaldonate = sum(Values), .by = c(Parties, year)) |>
+  ggplot(aes(x = Parties, y = totaldonate, fill = Parties)) + 
+  geom_col() +
+  theme_bw() +
+  transition_time(year) + 
+   labs(title = 'Year: {frame_time}', y = 'Total Donations', x = 'Parties') 
+
+animate(animated_plot2,  fps = 10)
+  
+```
 
 
 
