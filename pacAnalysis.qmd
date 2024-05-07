@@ -4,7 +4,7 @@ format: html
 editor: visual
 ---
 
-```{r}
+```{r, warning = FALSE, message = FALSE, echo=FALSE}
 library(tidyverse)
 library(gganimate)
 library(gifski)
@@ -55,7 +55,7 @@ combinepacdf <- bind_rows(pacdf1, pacdf2, pacdf3, pacdf4, pacdf5,
 
 ```
 
-```{r warning =FALSE}
+```{r,warning =FALSE,echo=FALSE}
 processpac <- combinepacdf |>
   separate( "Country of Origin/Parent Company", into = c("Country", "Parent_Company"), sep = "/") |>
   mutate(Dems = as.double(str_sub(Dems, 2, 12))) |>
@@ -70,10 +70,12 @@ processpac |>
                values_to = "Values") |>
   ggplot(aes(x = year, y = Values, color = Parties)) +
   geom_point() + 
-  geom_line()
+  geom_line() + 
+  scale_color_manual(values = c("Dems" = "blue", "Repubs" = "red")) +
+  theme_bw()
 ```
 
-```{r}
+```{r, echo=FALSE}
 animated_plot <- processpac %>%
   pivot_longer(cols = c("Dems", "Repubs"), names_to = "Parties", values_to = "Values") %>%
   summarise(valuescount = sum(Values), .by = c(Country, year, Parties)) %>%
@@ -81,6 +83,7 @@ animated_plot <- processpac %>%
   ggplot(aes(x = Country, y = valuescount, fill = Parties)) +
   geom_col(position = 'dodge') +
   scale_x_discrete(guide = guide_axis(angle = 45)) +
+  scale_fill_manual(values = c("Dems" = "blue", "Repubs" = "red")) +
   theme_bw() +
   transition_time(year) +
   labs(title = 'Year: {frame_time}', y = 'Total Donations', x = 'Country') +
@@ -91,8 +94,7 @@ animate(animated_plot,  fps = 10)
 
 ```
 
-
-```{r}
+```{r, echo=FALSE}
 animated_plot2 <- processpac |>
   pivot_longer(cols = c("Dems", "Repubs"), names_to = "Parties", values_to = "Values") |>
   summarise(totaldonate = sum(Values), .by = c(Parties, year)) |>
@@ -100,6 +102,7 @@ animated_plot2 <- processpac |>
   geom_col() +
   theme_bw() +
   transition_time(year) + 
+  scale_fill_manual(values = c("Dems" = "blue", "Repubs" = "red")) +
    labs(title = 'Year: {frame_time}', y = 'Total Donations', x = 'Parties') 
 
 animate(animated_plot2,  fps = 10)
@@ -107,5 +110,21 @@ animate(animated_plot2,  fps = 10)
 ```
 
 
+
+```{r}
+ggplot(house_senate_bound, aes(x=year, y=value, color=party)) + geom_line(aes(linetype=branch)) + 
+  facet_wrap(~party) + 
+  theme_clean() + 
+  theme(axis.text.x = element_text(angle=-60, hjust=0)) + 
+  labs(title = "PAC Donations and Congress Representation Over Time", 
+       subtitle = "Trend of Donation seems to determine representation in congress", 
+       x = "Year", y = "Representation (%)", 
+       color = "Party", 
+       linetype = "Lines",
+       caption = "OpenSecrets (2020)") + 
+  scale_y_continuous(labels = scales::percent_format(accuracy=1)) + 
+  scale_color_manual(values = c("blue", "red"))
+```
+```
 
 
