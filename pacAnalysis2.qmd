@@ -1,17 +1,20 @@
 ---
-title: "pacAnalysis2"
+title: "PAC Analysis"
 format: html
 editor: visual
 ---
 
-```{r}
+```{r include=FALSE}
+
+knitr::opts_chunk$set(echo = FALSE)
+
 library(tidyverse)
 library(ggthemes) 
 library(gganimate)
 library(gifski)
 ```
 
-```{r}
+```{r echo = FALSE, include = FALSE}
 csv_data = read_csv("combined_pac.csv")
 anim_data = csv_data %>% mutate(president_party = case_when(
   (year_cycle >= 2000 & year_cycle < 2008) ~ "Republican",
