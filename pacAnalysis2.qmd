@@ -155,9 +155,13 @@ house_senate_bound = bind_rows(house_senate_csv, house_senate_csv_1) %>%
   mutate(party=if_else(str_detect(position, "repub"),
                        "Republican", "Democrat")) 
 
-house_donation_correlation = cor(house_senate_bound %>% filter(position == "repub_total") %>% pull(value), house_senate_bound %>% filter(position == "republican_house") %>% pull(value))
+REPhouse_donation_correlation = cor(house_senate_bound %>% filter(position == "repub_total") %>% pull(value), house_senate_bound %>% filter(position == "republican_house") %>% pull(value))
 
-senate_donation_correlation = cor(house_senate_bound %>% filter(position == "repub_total") %>% pull(value), house_senate_bound %>% filter(position == "republican_senate") %>% pull(value))
+REPsenate_donation_correlation = cor(house_senate_bound %>% filter(position == "repub_total") %>% pull(value), house_senate_bound %>% filter(position == "republican_senate") %>% pull(value))
+
+DEMhouse_donation_correlation = cor(house_senate_bound %>% filter(position == "dem_total") %>% pull(value), house_senate_bound %>% filter(position == "democratic_house") %>% pull(value))
+
+DEMsenate_donation_correlation = cor(house_senate_bound %>% filter(position == "dem_total") %>% pull(value), house_senate_bound %>% filter(position == "democratic_senate") %>% pull(value))
 
 ```
 
@@ -203,10 +207,12 @@ ggplot(house_senate_bound, aes(x=year, y=value, color=party)) + geom_line(aes(li
 ```
 
 Correlation Between House of Representative and Donation Percentages:
-**`r sprintf("%.3f", house_donation_correlation)`**
+Republican: **`r sprintf("%.3f", REPhouse_donation_correlation)`**
+Democratic: **`r sprintf("%.3f", DEMhouse_donation_correlation)`**
 
 Correlation Between Senate and Donation Percentages:
-**`r sprintf("%.3f", senate_donation_correlation)`**
+Republican: **`r sprintf("%.3f", REPsenate_donation_correlation)`**
+Democratic **`r sprintf("%.3f", DEMsenate_donation_correlation)`**
 
 From the plots, it seems that the party representation in Congress almost parallels the trend of foreign-connected PAC donations.
 
@@ -261,13 +267,7 @@ animate(anim_country, nframes=200)
 ```
 
 ```{r}
-predanalysis <- house_senate_bound |>
-  select(!position) |>
-  pivot_wider(names_from = branch, values_from = value)
-
-model = lm(predanalysis, formula = Donations ~  House)
-
-summary(model)
+house_senate_bound
 
 ```
 
