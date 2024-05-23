@@ -12,6 +12,13 @@ library(tidyverse)
 library(ggthemes) 
 library(gganimate)
 library(gifski)
+library(randomForest)
+library(dplyr)
+library(ggplot2)
+library(pdp)
+library(gridExtra)
+library(DT)
+library(knitr)
 ```
 
 ```{r}
@@ -165,9 +172,6 @@ DEMsenate_donation_correlation = cor(house_senate_bound %>% filter(position == "
 
 ```
 
-## Data Wrangling
-
-
 ## Analysis
 
 ### Overview of PAC Influence on US Congress Representation
@@ -249,6 +253,7 @@ anim_data_country <- csv_data_country %>% pivot_longer(cols=c(dems_sum, repubs_s
   (year_cycle >= 2020 & year_cycle <= 2024) ~ "Democrat"
 ))
 ```
+
 ```{r}
 anim_country <- ggplot(data=anim_data_country, mapping=aes(x=country, y=amount/100000, fill=party)) +
   geom_col(position="dodge") +
@@ -266,10 +271,218 @@ anim_country <- ggplot(data=anim_data_country, mapping=aes(x=country, y=amount/1
 animate(anim_country, nframes=200)
 ```
 
+
+
+## Election Prediction Using PAC Donations
+
+### Visualization
+
 ```{r}
-house_senate_bound
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+
+# Summarize the data
+summarized_data <- anim_data_country |>
+  summarise(totalsum = sum(amount), .by = c(party, year_cycle, president_party))
+
+# Define the periods manually
+periods <- data.frame(
+  president_party = c("Republican", "Democrat", "Republican", "Democrat"),
+  start_year = c(2000, 2008, 2016, 2020),
+  end_year = c(2008, 2016, 2020, 2024)
+)
+
+# Create the plot with shaded regions and lines
+ggplot(summarized_data, aes(x = year_cycle, y = totalsum, color = party)) +
+  geom_rect(data = periods, aes(xmin = start_year, xmax = end_year, ymin = -Inf, ymax = Inf, fill = president_party), alpha = 0.2, inherit.aes = FALSE) +
+  geom_point() +
+  geom_line() +
+  scale_color_manual(values = c("blue", "red")) +
+  scale_fill_manual(values = c("Republican" = "red", "Democrat" = "blue")) +
+  labs(title = "Total PAC Donations by Year Cycle and President's Party",
+       x = "Year Cycle",
+       y = "Total Sum",
+       fill = "President's Party",
+       color = "Party") +
+  theme_clean()
 
 ```
+
+This graph illustrates the total sum of PAC donations received by Democratic and Republican candidates over different election cycles from 2000 to 2024. The donations are represented by blue lines for Democrats (dems_sum) and red lines for Republicans (repubs_sum). The background shading indicates the president's party during each period, with blue representing Democratic presidencies and red representing Republican presidencies.
+
+Observation:
+- From 2000 to around 2008, Republican PAC donations were consistently higher than Democratic donations, reflecting stronger Republican fundraising during this period.
+
+- A significant surge in donations for both parties occurred around 2008-2012, with Republicans experiencing a peak in donations around 2012.
+
+- Post-2012, Republican donations showed a sharp decline, while Democratic donations remained relatively stable, with slight fluctuations.
+
+- By 2020, Democratic donations briefly exceeded Republican donations but then both saw a decline leading into 2024.
+
+- By 2024, although both party have significantly less donations, the Republican party have a slightly better edge in terms of momentum, which sole based on the historical pattern, Donald J Trump is expected to win the 2024 Presidential Election over current President Joe Biden.
+
+- The fluctuation in donations aligns with the changes in the president's party, suggesting that political context significantly impacts fundraising efforts.
+
+
+```{r}
+summarized_data_wider <- summarized_data |>
+  pivot_wider(names_from = party, values_from = totalsum)
+
+# Calculate the differences
+summarized_data_wider <- summarized_data_wider |>
+  arrange(year_cycle) |>
+  mutate(diffdems = dems_sum/lag(dems_sum),
+         diffrepubs = repubs_sum/lag(repubs_sum)) |>
+  drop_na()
+
+summarized_data2 <- summarized_data_wider |>
+  pivot_longer(cols = c(diffdems, diffrepubs), names_to = "party", values_to = "diffsumm")
+
+
+ggplot(summarized_data2, aes(x = year_cycle, y = diffsumm, color = party)) +
+  geom_rect(data = periods, aes(xmin = start_year, xmax = end_year, ymin = -Inf, ymax = Inf, fill = president_party), alpha = 0.2, inherit.aes = FALSE) +
+  geom_point() +
+  geom_line() +
+  scale_color_manual(values = c("blue", "red")) +
+  scale_fill_manual(values = c("Republican" = "red", "Democrat" = "blue")) +
+  labs(title = "Yearly Change in PAC Donations by President's Party",
+       x = "Year Cycle",
+       y = "Total Sum",
+       fill = "President's Party",
+       color = "Party") +
+  theme_clean()
+```
+This graph tracks the yearly changes in PAC donations for Democrats (diffdems) and Republicans (diffrepubs) over the same period. The changes are calculated based on the differences in donations from one cycle to the next. The background shading again represents the president's party, with blue for Democratic presidencies and red for Republican presidencies.
+
+Observation:
+
+- Winning Party Momentum: There is a noticeable spike in the change of donations for the winning party in election years:
+
+  - 2008 (Obama): Significant increase in Democratic donations around 2008-2010; momentum prevails Republican  Party.
+  
+  - 2016 (Trump): Marked increase in Republican donations around 2016; momentum prevails Democratic Party.
+  
+  - 2020 (Biden): Significant increase in Democratic donations around 2020; momentum prevails Republican Party.
+
+- Both parties show fluctuations in the change of donations, with Republicans generally seeing more volatility compared to Democrats.
+
+- By 2020, both parties show a decrease in yearly changes, reflecting a downturn in PAC donations heading into the 2024 election cycle.
+
+- The graph highlights that while both parties experience significant changes in donations, the timing and magnitude of these changes are influenced by the prevailing political climate and the party in the presidency.
+
+### Model Creation
+
+This model aims to predict the political party of the president for the year 2024 using historical data on political contributions from 2000 to 2024, with training limited to data up to 2012. The process begins by loading necessary libraries for data manipulation and machine learning. Historical data is then prepared by calculating the lagged values of contributions, which represent contributions from the previous cycle, and computing the ratios of current to lagged contributions to capture relative changes. A Random Forest classifier is trained on this processed data, using the election cycle, sums of contributions for each party, and the computed ratios as predictor variables. For the 2024 prediction, a new dataset is created with projected contribution sums, and ratios are calculated based on the latest available training data. The trained model then predicts the political party of the president for 2024 based on this new data. The final output includes the year, projected contribution sums, calculated ratios, and the predicted political party. This model leverages historical trends and relative changes in political contributions to forecast the political outcome for the 2024 presidential election.
+
+```{r include=FALSE}
+
+summarized_data3 <- summarized_data |>
+  mutate(president_party = case_when(
+  (year_cycle >= 2000 & year_cycle < 2008) ~ "Republican",
+  (year_cycle >= 2008 & year_cycle < 2016) ~ "Democrat",
+  (year_cycle >= 2016 & year_cycle < 2020) ~ "Republican",
+  (year_cycle >= 2020 & year_cycle <= 2024) ~ "Democrat"
+)) |>
+  ungroup()
+
+summarized_data3process <- summarized_data3 |>
+  pivot_wider(names_from = party, values_from = totalsum)
+
+
+```
+
+
+```{r include=FALSE}
+# Load necessary libraries
+library(randomForest)
+library(dplyr)
+
+# Assuming the updated summarized_data3 is already defined
+
+# Calculate the lag/difference in dems_sum and repubs_sum
+training_data <- summarized_data3process %>%
+  filter(year_cycle <= 2012) %>%
+  mutate(lag_dems = lag(dems_sum),
+         lag_repubs = lag(repubs_sum))|>
+  drop_na() |>
+  mutate(dems_ratio = dems_sum/lag_dems, repubs_ratio = repubs_sum/lag_repubs)
+
+# Create a Random Forest classifier
+model <- randomForest(factor(president_party) ~ year_cycle + dems_sum + repubs_sum + dems_ratio + repubs_ratio, data = training_data)
+
+# Define the values for 2024
+last_training_data <- tail(training_data, 1)
+prediction_data <- data.frame(year_cycle = 2024, dems_sum = 4272336, repubs_sum = 6192659)
+
+# Calculate ratios for 2024
+prediction_data$dems_ratio <- prediction_data$dems_sum / last_training_data$dems_sum
+prediction_data$repubs_ratio <- prediction_data$repubs_sum / last_training_data$repubs_sum
+
+# Predict 2024 president's party
+prediction_data$president_party_predicted <- predict(model, newdata = prediction_data)
+
+```
+
+
+
+```{r }
+
+
+# Calculate the lag/difference in dems_sum and repubs_sum
+training_data <- summarized_data3process %>%
+  filter(year_cycle <= 2012) %>%
+  mutate(lag_dems = lag(dems_sum),
+         lag_repubs = lag(repubs_sum)) %>%
+  drop_na() %>%
+  mutate(dems_ratio = dems_sum / lag_dems, repubs_ratio = repubs_sum / lag_repubs)
+
+# Create a Random Forest classifier
+model <- randomForest(factor(president_party) ~ year_cycle + dems_sum + repubs_sum + dems_ratio + repubs_ratio, data = training_data)
+
+# Define the values for 2024
+last_training_data <- tail(training_data, 1)
+prediction_data <- data.frame(year_cycle = 2024, dems_sum = 4272336, repubs_sum = 6192659)
+
+# Calculate ratios for 2024
+prediction_data$dems_ratio <- prediction_data$dems_sum / last_training_data$dems_sum
+prediction_data$repubs_ratio <- prediction_data$repubs_sum / last_training_data$repubs_sum
+
+# Predict 2024 president's party
+prediction_data$president_party_predicted <- predict(model, newdata = prediction_data)
+
+
+
+# 2. Partial Dependence Plots
+pdp_dems_sum <- partial(model, pred.var = "dems_sum", plot = TRUE, main = "Partial Dependence of dems_sum")
+pdp_repubs_sum <- partial(model, pred.var = "repubs_sum", plot = TRUE, main = "Partial Dependence of repubs_sum")
+pdp_dems_ratio <- partial(model, pred.var = "dems_ratio", plot = TRUE, main = "Partial Dependence of dems_ratio")
+pdp_repubs_ratio <- partial(model, pred.var = "repubs_ratio", plot = TRUE, main = "Partial Dependence of repubs_ratio")
+pdp_year_cycle <- partial(model, pred.var = "year_cycle", plot = TRUE, main = "Partial Dependence of year_cycle")
+
+```
+```{r}
+kable(prediction_data, format = "html", table.attr = "class='table table-striped'", col.names = c("Year Cycle", "Democratic Sum", "Republican Sum", "Democratic Ratio", "Republican Ratio", "Predicted President Party"))
+```
+
+The prediction for the 2024 presidential election indicates that the Republican Party is expected to win. This is based on a Random Forest model that used data from previous election cycles. The data shows that the Democratic contributions sum to 4,272,336, while the Republican contributions sum to 6,192,659. The ratios of current to previous contributions are 0.523 for Democrats and 0.527 for Republicans, suggesting a slightly higher momentum for the Republicans, leading to the predicted outcome.
+
+```{r}
+varImpPlot(model, main = "Variable Importance in Random Forest Model")
+```
+
+This graph illustrates the variable importance in a Random Forest model by showing the contribution of each variable to the model's predictive performance. It uses the "Mean Decrease Gini" score to quantify the influence of each factor, with a higher score indicating a more influential variable.
+
+```{r}
+# Combine plots into a grid for better visualization
+grid.arrange( pdp_dems_sum, pdp_repubs_sum, pdp_dems_ratio, pdp_repubs_ratio, ncol = 2)
+```
+
+These plots show the partial dependence of different variables in the model on the model's predictions. Each plot represents how a specific variable, such as "dems_sum," "repubs_sum," "dems_ratio," and "repubs_ratio", influences the model's output while keeping all other variables constant. 
+
+## Conclusion
+
+Ultimately, it's important to keep in mind that such model and analysis only attempt to use one single factor, PAC Donation, to try to offer insights into an extremely complicated human event, US election. Therefore, it's important to understand the constraint and limitness in terms of information this model receive when making its prediction. This project have prove that foreign influence through Political Action Committee does seems exist and also hold a significant stake in the party composure of the US Congress as seen with the high correlation factor. Addditionally, during presidential election years, the party that seems to have more momentum as define by the ratio of PAC Donation have always led to the winner of the election since 2000. If this trend continue, it is predicted that a Republican President will came to office of the 2024 election if the current PAC donations to each party maintains the same. 
 
 
 
